@@ -258,39 +258,62 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 }
 
 @media (max-height: 520px) {
+  /* Landscape phones: two-column layout so everything fits without scrolling.
+     Left: title + eyes. Right: instructions + start button. */
   #start-screen {
-    /* top-aligned instead of centered: centered flex content that overflows
-       gets clipped above the top edge where scrolling can't reach it */
-    justify-content: flex-start;
-    padding: 20px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 400px);
+    grid-template-areas:
+      "title intro"
+      "eyes  steps"
+      "eyes  btn";
+    align-content: center;
+    justify-content: center;
+    column-gap: 24px;
+    padding: 16px;
     overflow-y: auto;
   }
 
-  #start-screen > * { flex-shrink: 0; }
-
   #start-screen h1 {
-    font-size: 34px;
-    margin-bottom: 4px;
+    grid-area: title;
+    justify-self: center;
+    align-self: end;
+    font-size: 30px;
+    margin-bottom: 2px;
   }
 
-  #eye-canvas { max-width: 200px; }
+  #eye-canvas {
+    grid-area: eyes;
+    justify-self: center;
+    align-self: start;
+    max-width: 190px;
+  }
 
   #start-screen p {
+    grid-area: intro;
+    align-self: end;
+    text-align: left;
     font-size: 11px;
-    margin-bottom: 8px;
-    max-width: 420px;
+    margin-bottom: 6px;
   }
 
   #instructions {
+    grid-area: steps;
     font-size: 10.5px;
     line-height: 1.5;
-    margin-bottom: 14px;
-    max-width: 420px;
+    margin-bottom: 8px;
   }
 
-  #instructions li { margin-bottom: 4px; }
+  #instructions li { margin-bottom: 3px; }
 
-  #start-btn, #hi-btn {
+  #start-btn {
+    grid-area: btn;
+    justify-self: start;
+    font-size: 12px;
+    padding: 10px 28px;
+  }
+
+  #hi-btn {
     font-size: 12px;
     padding: 10px 28px;
   }
