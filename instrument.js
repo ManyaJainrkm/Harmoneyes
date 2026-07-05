@@ -74,6 +74,7 @@ const DISC_THEMES = {
 function drawDisc(disc, labels, activeIndex, theme) {
   const { cx, cy, r } = disc;
   const segAngle = (Math.PI * 2) / labels.length;
+  const labelSize = Math.round(Math.min(22, Math.max(12, r * 0.1)));
 
   labels.forEach((label, i) => {
     const startAngle = i * segAngle - Math.PI / 2 - segAngle / 2;
@@ -97,7 +98,7 @@ function drawDisc(disc, labels, activeIndex, theme) {
     const labelY = cy + Math.sin(midAngle) * r * 0.65;
 
     ctx.fillStyle = i === activeIndex ? "#1a1410" : "#f4ede1";
-    ctx.font = "600 22px Fraunces, serif";
+    ctx.font = `600 ${labelSize}px Fraunces, serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(label, labelX, labelY);
