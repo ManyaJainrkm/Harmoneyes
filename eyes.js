@@ -17,11 +17,12 @@ const EYES = [
 
 const C_OUTLINE   = "#1a1410";
 const C_WHITE     = "#e8e2d8";
-const C_IRIS      = "#9a9490";
-const C_IRIS_DARK = "#6e6a65";
-const C_PUPIL     = "#2c2927";
+// Per-eye iris colours matching the discs: wine = left/notes, jade = right/qualities
+const IRIS_WINE   = { base: "#8a2f3c", dark: "#5c1c26" };
+const IRIS_JADE   = { base: "#4e8577", dark: "#2f5d51" };
+const C_PUPIL     = "#22302b";
 const C_LASH      = "#1a1410";
-const C_NOTE      = "#1a1410";     // near-black ink for notes
+const C_NOTE      = "#6b1f2a";     // wine ink for notes
 const C_DOT       = "rgba(26,20,16,0.18)";
 
 let wCache = {};
@@ -59,7 +60,7 @@ function almondPath(ctx, eye, blinkT) {
   ctx.closePath();
 }
 
-function drawIrisPupil(ctx, eye, blinkT, px, py) {
+function drawIrisPupil(ctx, eye, blinkT, px, py, iris) {
   if (blinkT > 0.85) return;
   const { lx, rx, cy } = eye;
   const eyeW  = rx - lx;
@@ -74,10 +75,10 @@ function drawIrisPupil(ctx, eye, blinkT, px, py) {
 
   ctx.beginPath();
   ctx.arc(cx, cyi, irisR, 0, Math.PI * 2);
-  ctx.fillStyle = C_IRIS;
+  ctx.fillStyle = iris.base;
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(26,20,16,0.28)";
+  ctx.strokeStyle = "rgba(201,162,75,0.45)";  // gold flecks in the jade
   ctx.lineWidth = 0.9;
   for (let s = 0; s < 14; s++) {
     const a = (s / 14) * Math.PI * 2 + w('sa' + s, 0.15);
@@ -89,7 +90,7 @@ function drawIrisPupil(ctx, eye, blinkT, px, py) {
 
   ctx.beginPath();
   ctx.arc(cx, cyi, irisR * 0.62, 0, Math.PI * 2);
-  ctx.strokeStyle = C_IRIS_DARK;
+  ctx.strokeStyle = iris.dark;
   ctx.lineWidth = 1.2;
   ctx.stroke();
 
@@ -194,12 +195,12 @@ function drawDots(ctx, eye, blinkT) {
   ctx.restore();
 }
 
-function drawEye(ctx, eye, blinkT, px, py) {
+function drawEye(ctx, eye, blinkT, px, py, iris) {
   almondPath(ctx, eye, blinkT);
   ctx.fillStyle = C_WHITE;
   ctx.fill();
 
-  drawIrisPupil(ctx, eye, blinkT, px, py);
+  drawIrisPupil(ctx, eye, blinkT, px, py, iris);
 
   almondPath(ctx, eye, blinkT);
   ctx.strokeStyle = C_OUTLINE;
@@ -247,9 +248,33 @@ function stepNotes() {
   notes = notes.filter(n => n.opacity > 0);
 }
 
+// ---------- Gaze: glance left / right / up / down / diagonally ----------
+const GAZE_X = 34;   // max horizontal pupil travel
+const GAZE_Y = 26;   // max vertical pupil travel (drawIrisPupil scales y by 0.3)
+
+// centre is weighted so the eyes return to resting gaze often
+const GAZE_DIRS = [
+  [ 0,  0], [ 0,  0], [ 0,  0],
+  [-1,  0], [ 1,  0],              // left, right
+  [ 0, -1], [ 0,  1],              // up, down
+  [-1, -1], [ 1, -1],              // diagonals up
+  [-1,  1], [ 1,  1],              // diagonals down
+];
+
+let gazeTarget = { x: 0, y: 0 };
+let gazeHold   = 10;
+
+function pickGaze() {
+  const [dx, dy] = GAZE_DIRS[Math.floor(Math.random() * GAZE_DIRS.length)];
+  gazeTarget = { x: dx * GAZE_X, y: dy * GAZE_Y };
+  gazeHold   = 8 + Math.floor(Math.random() * 20);  // hold ~0.8–2.8s
+  if (Math.random() < 0.45) blinkTimer = nextBlink; // often blink on a glance
+}
+
 // ---------- Main loop ----------
 let frameCount = 0;
 let blinkTimer = 0;
+let nextBlink  = 30;
 let pupilPos   = { x: 0, y: 0 };
 
 function drawFrame() {
@@ -257,29 +282,37 @@ function drawFrame() {
   ec.clearRect(0, 0, W, H);
   frameCount++;
 
-  if (frameCount % 6 === 0) {
-    pupilPos = {
-      x: Math.round((Math.random() - 0.5) * 16),
-      y: Math.round((Math.random() - 0.5) * 8),
-    };
-  }
+  if (--gazeHold <= 0) pickGaze();
 
+  // snap toward the gaze target in big discrete hops — stop-motion saccade
+  pupilPos.x += Math.round((gazeTarget.x - pupilPos.x) * 0.55);
+  pupilPos.y += Math.round((gazeTarget.y - pupilPos.y) * 0.55);
+
+  // tiny per-frame tremor on top of the held gaze
+  const px = pupilPos.x + Math.round((Math.random() - 0.5) * 3);
+  const py = pupilPos.y + Math.round((Math.random() - 0.5) * 2);
+
+  // blinks at random intervals (2.4–6.4s), sometimes triggered by a glance
   blinkTimer++;
   let blinkT = 0;
-  if      (blinkTimer >= 32 && blinkTimer < 34) blinkT = 1;
-  else if (blinkTimer >= 34 && blinkTimer < 36) blinkT = 0.45;
-  if (blinkTimer >= 50) blinkTimer = 0;
+  const ph = blinkTimer - nextBlink;
+  if      (ph >= 0 && ph < 2) blinkT = 1;
+  else if (ph >= 2 && ph < 4) blinkT = 0.45;
+  else if (ph >= 4) {
+    blinkTimer = 0;
+    nextBlink  = 24 + Math.floor(Math.random() * 40);
+  }
 
-  // Right eye — drawn normally
-  drawEye(ec, EYES[1], blinkT, pupilPos.x, pupilPos.y);
+  // Right eye — jade, matching the chord-quality disc
+  drawEye(ec, EYES[1], blinkT, px, py, IRIS_JADE);
 
-  // Left eye — mirrored horizontally around its own center
+  // Left eye — wine, matching the notes disc; mirrored around its own center
   const leftEye    = EYES[0];
   const leftCenterX = (leftEye.lx + leftEye.rx) / 2;
   ec.save();
   ec.translate(leftCenterX * 2, 0);
   ec.scale(-1, 1);
-  drawEye(ec, leftEye, blinkT, -pupilPos.x, pupilPos.y);
+  drawEye(ec, leftEye, blinkT, -px, py, IRIS_WINE);
   ec.restore();
 
   if (frameCount % 22 === 0) spawnNote();

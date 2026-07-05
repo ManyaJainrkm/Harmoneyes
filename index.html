@@ -28,11 +28,22 @@
 
   <button id="hindi-toggle">Sa Re Ga</button>
   
+  <div id="hi-screen">
+    <button id="hi-btn">Hi</button>
+  </div>
+
   <div id="start-screen">
+    <div class="deco-disc deco-disc--left"></div>
+    <div class="deco-disc deco-disc--right"></div>
     <h1>Harmoneyes</h1>
     <canvas id="eye-canvas" style="display:block; margin: 8px auto 4px;"></canvas>
-    <p>Allow camera access to begin. Hold a finger of your <strong>left hand</strong> over a note,
-       and your <strong>right hand</strong> over a chord quality, or leave your right hand off to hear the default hum. Make sure the webcam is properly positioned.</p>
+    <p class="intro-line">Two harmony discs will appear: <strong>notes</strong> on the left, <strong>chord qualities</strong> on the right.</p>
+    <ol id="instructions">
+      <li>Allow camera access and position your webcam so both hands are in view.</li>
+      <li>Hold a finger of your <strong>left hand</strong> over a note to make it sing.</li>
+      <li>Hold your <strong>right hand</strong> over a chord quality to colour the sound or keep it down for the default major chord.</li>
+      <li>Make something beautiful <3 </li>
+    </ol>
     <button id="start-btn">Start</button>
   </div>
 
@@ -40,6 +51,8 @@
     <p>Harmonies works best on a laptop or desktop with a webcam.</p>
   </div>
 </div>
+
+<audio id="elevator-music" src="elevator.mp3" loop preload="auto"></audio>
 
 <script src="instrument.js"></script>
 <script src="eyes.js"></script>

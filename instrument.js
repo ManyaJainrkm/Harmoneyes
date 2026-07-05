@@ -56,7 +56,22 @@ resizeCanvas();
 
 // ---------- Drawing the discs ----------
 
-function drawDisc(disc, labels, activeIndex) {
+// Translucent glass tints: wine for notes (left), jade for qualities (right).
+// Alternating segment shades give a subtle pinwheel depth; gold marks the active segment.
+const DISC_THEMES = {
+  wine: {
+    segments: ["rgba(107, 31, 42, 0.45)", "rgba(80, 22, 31, 0.45)"],
+    hubFill:  "rgba(58, 15, 22, 0.75)",
+    hubRing:  "rgba(201, 162, 75, 0.55)",
+  },
+  jade: {
+    segments: ["rgba(78, 133, 119, 0.45)", "rgba(56, 102, 90, 0.45)"],
+    hubFill:  "rgba(34, 62, 55, 0.75)",
+    hubRing:  "rgba(201, 162, 75, 0.55)",
+  },
+};
+
+function drawDisc(disc, labels, activeIndex, theme) {
   const { cx, cy, r } = disc;
   const segAngle = (Math.PI * 2) / labels.length;
 
@@ -70,8 +85,8 @@ function drawDisc(disc, labels, activeIndex) {
     ctx.closePath();
 
     ctx.fillStyle = i === activeIndex
-      ? "rgba(201, 162, 75, 0.55)"   // gold highlight when active
-      : "rgba(26, 20, 16, 0.45)";
+      ? "rgba(201, 162, 75, 0.75)"   // gold highlight when active
+      : theme.segments[i % 2];
     ctx.fill();
     ctx.strokeStyle = "rgba(244, 237, 225, 0.25)";
     ctx.lineWidth = 1;
@@ -91,9 +106,10 @@ function drawDisc(disc, labels, activeIndex) {
   // center hub
   ctx.beginPath();
   ctx.arc(cx, cy, r * 0.32, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(26, 20, 16, 0.75)";
+  ctx.fillStyle = theme.hubFill;
   ctx.fill();
-  ctx.strokeStyle = "rgba(244, 237, 225, 0.3)";
+  ctx.strokeStyle = theme.hubRing;
+  ctx.lineWidth = 2;
   ctx.stroke();
 }
 
@@ -248,8 +264,8 @@ function onResults(results) {
     });
   }
 
-  drawDisc(leftDisc, showHindi ? NOTES_HINDI : NOTES, leftIndex);
-  drawDisc(rightDisc, CHORD_QUALITIES, rightIndex);
+  drawDisc(leftDisc, showHindi ? NOTES_HINDI : NOTES, leftIndex, DISC_THEMES.wine);
+  drawDisc(rightDisc, CHORD_QUALITIES, rightIndex, DISC_THEMES.jade);
 
   updateNote(leftIndex);
    updateChordQuality(rightIndex);
@@ -272,12 +288,25 @@ function startCamera() {
   camera.start();
 }
 
+// ---------- Hi screen + elevator music ----------
+
+const hiScreen = document.getElementById("hi-screen");
+const hiBtn = document.getElementById("hi-btn");
+const elevatorMusic = document.getElementById("elevator-music");
+
+hiBtn.addEventListener("click", () => {
+  hiScreen.style.display = "none";
+  elevatorMusic.play().catch((err) => console.warn("Music playback failed:", err));
+});
+
 // ---------- Start button ----------
 
 startBtn.addEventListener("click", async () => {
   try {
     await initAudio();
     startCamera();
+    elevatorMusic.pause();
+    elevatorMusic.currentTime = 0;
     startScreen.style.display = "none";
   } catch (err) {
     alert("Camera access is required to use Harmonies. Please allow access and try again.");
