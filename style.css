@@ -66,6 +66,7 @@ h1, h2, .display {
 }
 
 #hud span { color: var(--gold); font-weight: 700; }
+#hud .hud-label { color: var(--paper); font-weight: 400; }
 
 /* ---------- Hi screen — first thing you see ---------- */
 #hi-screen {

@@ -38,6 +38,8 @@ const startBtn = document.getElementById("start-btn");
 const hudNote = document.getElementById("hud-note");
 const hudVowel = document.getElementById("hud-vowel");
 const hudHands = document.getElementById("hud-hands");
+const hudNoteLabel = document.getElementById("hud-note-label");
+const hudVowelLabel = document.getElementById("hud-vowel-label");
 
 // ---------- Resize handling ----------
 
@@ -188,6 +190,76 @@ function playHarmony(note, quality = "maj") {
   });
 }
 
+// ---------- Tanpura drone (Sa Re Ga mode) ----------
+// The three standard tanpura tunings plus a Sa-only shruti-box option.
+// Each pattern is the classic 4-string pluck cycle as semitone offsets from
+// middle Sa: [first string, jodi, jodi, kharaj (low Sa)].
+const DRONE_VARIANTS = ["Sa–Pa", "Sa–Ma", "Sa–Ni", "Sa"];
+const DRONE_PATTERNS = {
+  "Sa–Pa": [-5,  0, 0, -12],   // Pa below Sa — the default tuning
+  "Sa–Ma": [-7,  0, 0, -12],   // for ragas that omit Pa (Malkauns…)
+  "Sa–Ni": [-1,  0, 0, -12],   // for ragas that omit Pa and Ma (Marwa…)
+  "Sa":    [-12, 0, 0, -12],   // kharaj only
+};
+
+let selectedSaIndex = 0;      // default Sa = C
+let selectedDroneIndex = 0;   // default Sa–Pa
+
+let tanpuraPluck = null;      // synthesized fallback voice
+let tanpuraSampler = null;    // real tanpura sample, if tanpura.mp3 exists
+let tanpuraSamplerReady = false;
+let tanpuraLoop = null;
+let tanpuraString = 0;
+
+function buildTanpura() {
+  if (tanpuraLoop) return;
+
+  const reverb = new Tone.Reverb({ decay: 6, wet: 0.5 }).toDestination();
+  const filter = new Tone.Filter(2400, "lowpass").connect(reverb);
+
+  tanpuraPluck = new Tone.PluckSynth({
+    attackNoise: 0.6,
+    dampening: 3200,
+    resonance: 0.97,
+    release: 2,
+  }).connect(filter);
+  tanpuraPluck.volume.value = 4;
+
+  // If a real single-pluck sample (recorded at C3) is present in the repo,
+  // prefer it over the synthesized pluck.
+  fetch("tanpura.mp3", { method: "HEAD" })
+    .then((res) => {
+      if (!res.ok) return;
+      tanpuraSampler = new Tone.Sampler({
+        urls: { C3: "tanpura.mp3" },
+        onload: () => { tanpuraSamplerReady = true; },
+      }).connect(filter);
+      tanpuraSampler.volume.value = -4;
+    })
+    .catch(() => {}); // no sample — the synthesized pluck carries the drone
+
+  tanpuraLoop = new Tone.Loop((time) => {
+    const pattern = DRONE_PATTERNS[DRONE_VARIANTS[selectedDroneIndex]];
+    const saFreq = NOTE_FREQS[NOTES[selectedSaIndex]] / 2; // middle Sa, low register
+    const freq = saFreq * semitoneRatio(pattern[tanpuraString % 4]);
+    const voice = tanpuraSamplerReady ? tanpuraSampler : tanpuraPluck;
+    voice.triggerAttackRelease(freq, 2.5, time);
+    tanpuraString++;
+  }, 0.8);
+}
+
+function startTanpura() {
+  buildTanpura();
+  tanpuraString = 0;
+  tanpuraLoop.start(0);
+  Tone.Transport.start();
+}
+
+function stopTanpura() {
+  if (tanpuraLoop) tanpuraLoop.stop();
+  Tone.Transport.stop();
+}
+
 // ---------- Main state update loop ----------
 
 function updateNote(index) {
@@ -254,7 +326,8 @@ function onResults(results) {
       if (userHand === "Left") {
         leftIndex = getSegmentIndex(x, y, leftDisc, NOTES.length);
       } else {
-        rightIndex = getSegmentIndex(x, y, rightDisc, CHORD_QUALITIES.length);
+        const rightCount = showHindi ? DRONE_VARIANTS.length : CHORD_QUALITIES.length;
+        rightIndex = getSegmentIndex(x, y, rightDisc, rightCount);
       }
 
       // draw a small marker at the fingertip
@@ -265,11 +338,25 @@ function onResults(results) {
     });
   }
 
-  drawDisc(leftDisc, showHindi ? NOTES_HINDI : NOTES, leftIndex, DISC_THEMES.wine);
-  drawDisc(rightDisc, CHORD_QUALITIES, rightIndex, DISC_THEMES.jade);
-
-  updateNote(leftIndex);
-   updateChordQuality(rightIndex);
+  if (showHindi) {
+    // Sargam mode: selections are sticky — point to change them, then take
+    // your hand away and the drone keeps humming at the chosen tuning.
+    if (leftIndex !== -1 && leftIndex !== selectedSaIndex) {
+      selectedSaIndex = leftIndex;
+      hudNote.textContent = NOTES[selectedSaIndex];
+    }
+    if (rightIndex !== -1 && rightIndex !== selectedDroneIndex) {
+      selectedDroneIndex = rightIndex;
+      hudVowel.textContent = DRONE_VARIANTS[selectedDroneIndex];
+    }
+    drawDisc(leftDisc, NOTES, selectedSaIndex, DISC_THEMES.wine);
+    drawDisc(rightDisc, DRONE_VARIANTS, selectedDroneIndex, DISC_THEMES.jade);
+  } else {
+    drawDisc(leftDisc, NOTES, leftIndex, DISC_THEMES.wine);
+    drawDisc(rightDisc, CHORD_QUALITIES, rightIndex, DISC_THEMES.jade);
+    updateNote(leftIndex);
+    updateChordQuality(rightIndex);
+  }
 
   ctx.restore();
 }
@@ -315,10 +402,27 @@ startBtn.addEventListener("click", async () => {
   }
 });
 
-// ---------- Hindi toggle ----------
-document.getElementById("hindi-toggle").addEventListener("click", () => {
+// ---------- Sa Re Ga toggle: Western chords <-> tanpura drone ----------
+document.getElementById("hindi-toggle").addEventListener("click", async () => {
   showHindi = !showHindi;
   const btn = document.getElementById("hindi-toggle");
   btn.textContent = showHindi ? "A B C" : "Sa Re Ga";
   btn.classList.toggle("active", showHindi);
+
+  if (showHindi) {
+    await initAudio();
+    stopAllVoices();
+    currentNote = null;
+    hudNoteLabel.textContent = "Sa";
+    hudVowelLabel.textContent = "Drone";
+    hudNote.textContent = NOTES[selectedSaIndex];
+    hudVowel.textContent = DRONE_VARIANTS[selectedDroneIndex];
+    startTanpura();
+  } else {
+    stopTanpura();
+    hudNoteLabel.textContent = "Note";
+    hudVowelLabel.textContent = "Quality";
+    hudNote.textContent = "—";
+    hudVowel.textContent = currentQuality;
+  }
 });
