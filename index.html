@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Harmonies — Instrument</title>
+<link rel="stylesheet" href="style.css" />
+
+<!-- MediaPipe Hands (pinned versions so nothing breaks under us) -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+
+<!-- Tone.js for audio + pitch shifting -->
+<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+</head>
+<body>
+
+<div id="stage">
+  <video id="webcam" autoplay playsinline muted></video>
+  <canvas id="overlay"></canvas>
+
+  <div id="hud">
+    <div>Note: <span id="hud-note">—</span></div>
+    <div>Quality: <span id="hud-vowel">—</span></div>
+    <div>Hands: <span id="hud-hands">0</span></div>
+  </div>
+
+  <button id="hindi-toggle">Sa Re Ga</button>
+  
+  <div id="start-screen">
+    <h1>Harmoneyes</h1>
+    <canvas id="eye-canvas" style="display:block; margin: 8px auto 4px;"></canvas>
+    <p>Allow camera access to begin. Hold a finger of your <strong>left hand</strong> over a note,
+       and your <strong>right hand</strong> over a chord quality, or leave your right hand off to hear the default hum. Make sure the webcam is properly positioned.</p>
+    <button id="start-btn">Start</button>
+  </div>
+
+  <div id="rotate-warning">
+    <p>Harmonies works best on a laptop or desktop with a webcam.</p>
+  </div>
+</div>
+
+<script src="instrument.js"></script>
+<script src="eyes.js"></script>
+</body>
+</html>
