@@ -106,18 +106,26 @@ h1, h2, .display {
 }
 
 /* ---------- Start screen — cream ---------- */
+/* Two-column layout at every size: title + eyes left, instructions + start
+   right. A single centered column overflows short viewports and flex-centering
+   clips the overflow where scrolling can't reach it. */
 #start-screen {
   position: absolute;
   inset: 0;
   background: #F2E6B1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 500px);
+  grid-template-areas:
+    "title intro"
+    "eyes  steps"
+    "eyes  btn";
+  align-content: center;
   justify-content: center;
+  column-gap: 48px;
   text-align: center;
   z-index: 20;
   padding: 40px;
-  overflow: hidden;
+  overflow: hidden auto;
 }
 
 /* Drifting dot pattern — steps() keeps the stop-motion feel */
@@ -185,6 +193,7 @@ h1, h2, .display {
 }
 
 #instructions {
+  grid-area: steps;
   max-width: 480px;
   text-align: left;
   font-size: 13px;
@@ -199,20 +208,31 @@ h1, h2, .display {
 #instructions strong { color: var(--wine); }
 
 #start-screen h1 {
+  grid-area: title;
+  justify-self: center;
+  align-self: end;
   font-family: 'Space Mono', monospace;
   font-weight: 700;
-  font-size: clamp(48px, 8vw, 96px);
+  font-size: clamp(36px, 5vw, 64px);
   letter-spacing: -0.03em;
   color: var(--ink);
   margin-bottom: 8px;
 }
 
 #start-screen p {
+  grid-area: intro;
+  align-self: end;
+  text-align: left;
   max-width: 480px;
   font-size: 14px;
   line-height: 1.7;
   color: rgba(26, 20, 16, 0.65);
   margin-bottom: 14px;
+}
+
+#start-btn {
+  grid-area: btn;
+  justify-self: start;
 }
 
 #start-screen strong { color: var(--wine); }
@@ -252,54 +272,36 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   }
 }
 
-/* ---------- Small landscape screens (phones held sideways) ---------- */
+/* ---------- Eyes canvas scales with the viewport ---------- */
 #eye-canvas {
-  max-width: min(500px, 76vw);
+  grid-area: eyes;
+  justify-self: center;
+  align-self: start;
+  max-width: min(400px, 40vw);
   height: auto;
 }
 
+/* ---------- Small landscape screens (phones held sideways) ---------- */
 @media (max-height: 520px) {
-  /* Landscape phones: two-column layout so everything fits without scrolling.
-     Left: title + eyes. Right: instructions + start button. */
   #start-screen {
-    display: grid;
     grid-template-columns: auto minmax(0, 400px);
-    grid-template-areas:
-      "title intro"
-      "eyes  steps"
-      "eyes  btn";
-    align-content: center;
-    justify-content: center;
     column-gap: 24px;
     padding: 16px;
-    overflow-y: auto;
   }
 
   #start-screen h1 {
-    grid-area: title;
-    justify-self: center;
-    align-self: end;
     font-size: 30px;
     margin-bottom: 2px;
   }
 
-  #eye-canvas {
-    grid-area: eyes;
-    justify-self: center;
-    align-self: start;
-    max-width: 190px;
-  }
+  #eye-canvas { max-width: 190px; }
 
   #start-screen p {
-    grid-area: intro;
-    align-self: end;
-    text-align: left;
     font-size: 11px;
     margin-bottom: 6px;
   }
 
   #instructions {
-    grid-area: steps;
     font-size: 10.5px;
     line-height: 1.5;
     margin-bottom: 8px;
@@ -307,14 +309,7 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
 
   #instructions li { margin-bottom: 3px; }
 
-  #start-btn {
-    grid-area: btn;
-    justify-self: start;
-    font-size: 12px;
-    padding: 10px 28px;
-  }
-
-  #hi-btn {
+  #start-btn, #hi-btn {
     font-size: 12px;
     padding: 10px 28px;
   }
@@ -339,18 +334,35 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 12px;
-  padding: 10px 24px;
-  background: var(--glass);
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(244,237,225,0.2);
-  border-radius: 2px;
-  letter-spacing: 0.1em;
+  font-size: 16px;
+  padding: 14px 32px;
+  background: var(--gold);
+  color: var(--ink);
+  border: none;
+  border-radius: 4px;
+  letter-spacing: 0.12em;
   z-index: 5;
+  animation: toggle-beckon 2.2s ease-in-out infinite;
   transition: background 0.2s ease, color 0.2s ease;
 }
 
+#hindi-toggle:hover {
+  background: #d9b25b;
+  transform: translateX(-50%);
+}
+
+/* once you're in — quiet down, show the way back */
 #hindi-toggle.active {
-  background: var(--gold);
-  color: var(--ink);
+  background: var(--glass);
+  color: var(--paper);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(244,237,225,0.2);
+  font-size: 12px;
+  padding: 10px 24px;
+  animation: none;
+}
+
+@keyframes toggle-beckon {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 75, 0.55); }
+  50%      { box-shadow: 0 0 0 12px rgba(201, 162, 75, 0); }
 }

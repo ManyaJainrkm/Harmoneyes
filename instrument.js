@@ -6,7 +6,23 @@
 // ---------- Config ----------
 
 const NOTES = ["C", "C#","D","D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]; // left disc, 12 segments
-const NOTES_HINDI = ["Sa","re","Re","ga","Ga","Ma","Ma'","Pa","dha","Dha","ni","Ni"];
+// Devanagari swaras, chromatic from Sa. Notation follows standard practice:
+// komal = horizontal line under the letter, teevra = vertical line above it
+// (drawn on the canvas by drawDisc).
+const NOTES_HINDI = [
+  { text: "सा" },
+  { text: "रे", komal: true },
+  { text: "रे" },
+  { text: "ग", komal: true },
+  { text: "ग" },
+  { text: "म" },
+  { text: "म", teevra: true },
+  { text: "प" },
+  { text: "ध", komal: true },
+  { text: "ध" },
+  { text: "नि", komal: true },
+  { text: "नि" },
+];
 let showHindi = false;
 const CHORD_QUALITIES = ["min", "7", "min7", "maj7", "aug", "dim", "sus4"];
 
@@ -99,11 +115,42 @@ function drawDisc(disc, labels, activeIndex, theme) {
     const labelX = cx + Math.cos(midAngle) * r * 0.65;
     const labelY = cy + Math.sin(midAngle) * r * 0.65;
 
-    ctx.fillStyle = i === activeIndex ? "#1a1410" : "#f4ede1";
+    // Labels are plain strings (western) or objects with notation marks:
+    // komal = line under the letter, teevra = vertical line above it,
+    // komalFirst = underline only the first syllable of a pluck cycle.
+    const text = typeof label === "string" ? label : label.text;
+    const labelColor = i === activeIndex ? "#1a1410" : "#f4ede1";
+    ctx.fillStyle = labelColor;
     ctx.font = `600 ${labelSize}px Fraunces, serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(label, labelX, labelY);
+    ctx.fillText(text, labelX, labelY);
+
+    if (typeof label === "object") {
+      ctx.strokeStyle = labelColor;
+      ctx.lineWidth = Math.max(1.2, labelSize * 0.07);
+      const w = ctx.measureText(text).width;
+      const underY = labelY + labelSize * 0.62;
+      if (label.komal) {
+        ctx.beginPath();
+        ctx.moveTo(labelX - w / 2, underY);
+        ctx.lineTo(labelX + w / 2, underY);
+        ctx.stroke();
+      }
+      if (label.komalFirst) {
+        const fw = ctx.measureText(text.split(" ")[0]).width;
+        ctx.beginPath();
+        ctx.moveTo(labelX - w / 2, underY);
+        ctx.lineTo(labelX - w / 2 + fw, underY);
+        ctx.stroke();
+      }
+      if (label.teevra) {
+        ctx.beginPath();
+        ctx.moveTo(labelX, labelY - labelSize * 0.72);
+        ctx.lineTo(labelX, labelY - labelSize * 1.02);
+        ctx.stroke();
+      }
+    }
   });
 
   // center hub
@@ -190,32 +237,33 @@ function playHarmony(note, quality = "maj") {
   });
 }
 
-// ---------- Tanpura drone (Sa Re Ga mode) ----------
-// The three standard tanpura tunings plus a Sa-only shruti-box option.
-// Each pattern is the classic 4-string pluck cycle as semitone offsets from
-// middle Sa: [first string, jodi, jodi, kharaj (low Sa)].
-const DRONE_VARIANTS = ["Sa–Pa", "Sa–Ma", "Sa–Ni", "Sa"];
-const DRONE_PATTERNS = {
-  "Sa–Pa": [-5,  0, 0, -12],   // Pa below Sa — the default tuning
-  "Sa–Ma": [-7,  0, 0, -12],   // for ragas that omit Pa (Malkauns…)
-  "Sa–Ni": [-1,  0, 0, -12],   // for ragas that omit Pa and Ma (Marwa…)
-  "Sa":    [-12, 0, 0, -12],   // kharaj only
-};
+// ---------- Tanpura drone (सा रे ग mode) ----------
+// Common tanpura tunings, each written as the spoken 4-string pluck cycle
+// [first string, jodi, jodi, kharaj (low Sa)] in semitone offsets from Sa.
+const DRONES = [
+  { label: { text: "प सा सा सा" },                    hud: "प–सा",        pattern: [-5,  0, 0, -12] }, // standard
+  { label: { text: "म सा सा सा" },                    hud: "म–सा",        pattern: [-7,  0, 0, -12] }, // ragas without Pa
+  { label: { text: "नि सा सा सा" },                   hud: "नि–सा",       pattern: [-1,  0, 0, -12] }, // ragas without Pa & Ma
+  { label: { text: "नि सा सा सा", komalFirst: true }, hud: "कोमल नि–सा",  pattern: [-2,  0, 0, -12] },
+  { label: { text: "सा सा सा सा" },                   hud: "सा",          pattern: [-12, 0, 0, -12] }, // kharaj only
+];
 
-let selectedSaIndex = 0;      // default Sa = C
-let selectedDroneIndex = 0;   // default Sa–Pa
+let selectedSaIndex = 0;      // Sa sits at C
+let selectedDroneIndex = 0;   // default प–सा
 
 let tanpuraPluck = null;      // synthesized fallback voice
 let tanpuraSampler = null;    // real tanpura sample, if tanpura.mp3 exists
 let tanpuraSamplerReady = false;
 let tanpuraLoop = null;
 let tanpuraString = 0;
+let tanpuraBus = null;        // shared filter+reverb chain, also used by swara voices
 
 function buildTanpura() {
   if (tanpuraLoop) return;
 
   const reverb = new Tone.Reverb({ decay: 6, wet: 0.5 }).toDestination();
   const filter = new Tone.Filter(2400, "lowpass").connect(reverb);
+  tanpuraBus = filter;
 
   tanpuraPluck = new Tone.PluckSynth({
     attackNoise: 0.6,
@@ -239,13 +287,48 @@ function buildTanpura() {
     .catch(() => {}); // no sample — the synthesized pluck carries the drone
 
   tanpuraLoop = new Tone.Loop((time) => {
-    const pattern = DRONE_PATTERNS[DRONE_VARIANTS[selectedDroneIndex]];
+    const pattern = DRONES[selectedDroneIndex].pattern;
     const saFreq = NOTE_FREQS[NOTES[selectedSaIndex]] / 2; // middle Sa, low register
     const freq = saFreq * semitoneRatio(pattern[tanpuraString % 4]);
     const voice = tanpuraSamplerReady ? tanpuraSampler : tanpuraPluck;
     voice.triggerAttackRelease(freq, 2.5, time);
     tanpuraString++;
   }, 0.8);
+}
+
+// ---------- Swara voice: left hand sings over the drone ----------
+// A warm sustained tone; when the hand leaves, it fades away very slowly.
+let swaraVoices = [];
+let currentSwaraIndex = -1;
+
+function releaseSwaras() {
+  swaraVoices.forEach((s) => {
+    s.triggerRelease();
+    setTimeout(() => s.dispose(), 9000); // free after the long fade
+  });
+  swaraVoices = [];
+}
+
+function swaraName(index) {
+  const s = NOTES_HINDI[index];
+  return s.text + (s.komal ? " (कोमल)" : s.teevra ? " (तीव्र)" : "");
+}
+
+function updateSwara(index) {
+  if (index === currentSwaraIndex) return;
+  currentSwaraIndex = index;
+  releaseSwaras();
+  if (index === -1 || !tanpuraBus) return;
+
+  const synth = new Tone.Synth({
+    oscillator: { type: "fatsawtooth", count: 3, spread: 18 },
+    envelope: { attack: 0.35, decay: 0.15, sustain: 0.75, release: 6 },
+  }).connect(tanpuraBus);
+  synth.volume.value = -12;
+  const freq = NOTE_FREQS[NOTES[selectedSaIndex]] * semitoneRatio(index);
+  synth.triggerAttack(freq);
+  swaraVoices.push(synth);
+  hudNote.textContent = swaraName(index);
 }
 
 function startTanpura() {
@@ -258,6 +341,8 @@ function startTanpura() {
 function stopTanpura() {
   if (tanpuraLoop) tanpuraLoop.stop();
   Tone.Transport.stop();
+  releaseSwaras();
+  currentSwaraIndex = -1;
 }
 
 // ---------- Main state update loop ----------
@@ -326,7 +411,7 @@ function onResults(results) {
       if (userHand === "Left") {
         leftIndex = getSegmentIndex(x, y, leftDisc, NOTES.length);
       } else {
-        const rightCount = showHindi ? DRONE_VARIANTS.length : CHORD_QUALITIES.length;
+        const rightCount = showHindi ? DRONES.length : CHORD_QUALITIES.length;
         rightIndex = getSegmentIndex(x, y, rightDisc, rightCount);
       }
 
@@ -339,18 +424,15 @@ function onResults(results) {
   }
 
   if (showHindi) {
-    // Sargam mode: selections are sticky — point to change them, then take
-    // your hand away and the drone keeps humming at the chosen tuning.
-    if (leftIndex !== -1 && leftIndex !== selectedSaIndex) {
-      selectedSaIndex = leftIndex;
-      hudNote.textContent = NOTES[selectedSaIndex];
-    }
+    // Left hand sings a swara over the drone; the drone choice is sticky —
+    // point to change it, then take your hand away and it keeps humming.
+    updateSwara(leftIndex);
     if (rightIndex !== -1 && rightIndex !== selectedDroneIndex) {
       selectedDroneIndex = rightIndex;
-      hudVowel.textContent = DRONE_VARIANTS[selectedDroneIndex];
+      hudVowel.textContent = DRONES[selectedDroneIndex].hud;
     }
-    drawDisc(leftDisc, NOTES, selectedSaIndex, DISC_THEMES.wine);
-    drawDisc(rightDisc, DRONE_VARIANTS, selectedDroneIndex, DISC_THEMES.jade);
+    drawDisc(leftDisc, NOTES_HINDI, leftIndex, DISC_THEMES.wine);
+    drawDisc(rightDisc, DRONES.map((d) => d.label), selectedDroneIndex, DISC_THEMES.jade);
   } else {
     drawDisc(leftDisc, NOTES, leftIndex, DISC_THEMES.wine);
     drawDisc(rightDisc, CHORD_QUALITIES, rightIndex, DISC_THEMES.jade);
@@ -406,17 +488,17 @@ startBtn.addEventListener("click", async () => {
 document.getElementById("hindi-toggle").addEventListener("click", async () => {
   showHindi = !showHindi;
   const btn = document.getElementById("hindi-toggle");
-  btn.textContent = showHindi ? "A B C" : "Sa Re Ga";
+  btn.textContent = showHindi ? "A B C" : "सा रे ग";
   btn.classList.toggle("active", showHindi);
 
   if (showHindi) {
     await initAudio();
     stopAllVoices();
     currentNote = null;
-    hudNoteLabel.textContent = "Sa";
+    hudNoteLabel.textContent = "Swara";
     hudVowelLabel.textContent = "Drone";
-    hudNote.textContent = NOTES[selectedSaIndex];
-    hudVowel.textContent = DRONE_VARIANTS[selectedDroneIndex];
+    hudNote.textContent = "—";
+    hudVowel.textContent = DRONES[selectedDroneIndex].hud;
     startTanpura();
   } else {
     stopTanpura();
